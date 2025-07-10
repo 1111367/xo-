@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196f3">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js');
+    }
+  </script>
+  <meta charset="UTF-8">
+  <title>إكس-أو ضد الكمبيوتر</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html {
+      height: 100%;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 600px) {
+      .board {
+        grid-template-columns: repeat(3, 80px);
+        grid-template-rows: repeat(3, 80px);
+      }
+
+      .cell {
+        width: 80px;
+        height: 80px;
+        font-size: 2rem;
+        line-height: 80px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      button, .mode-select {
+        font-size: 1rem;
+      }
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 0;
+      background: #f0f0f0;
+    }
+
+    .start-screen, .game-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+
+    .start-screen.active, .game-container.active {
+      display: flex;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+      margin-top: 20px;
+    }
+
+    .cell {
+      width: 100px;
+      height: 100px;
+      background: white;
+      border: 2px solid #ccc;
+      font-size: 2.5rem;
+      text-align: center;
+      line-height: 100px;
+      cursor: pointer;
+    }
+
+    .cell:hover {
+      background: #e0e0e0;
+    }
+
+    .status, .mode-select {
+      margin-top: 15px;
+      font-size: 1.2rem;
+      color: #333;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- شاشة البداية -->
+  <div class="start-screen active" id="startScreen">
+    <h1>🎮 لعبة إكس-أو</h1>
+    <p>اختر الطور والمستوى ثم ابدأ اللعب!</p>
+    <div class="mode-select">
+      <button onclick="setMode('player')">لاعب ضد لاعب</button>
+      <button onclick="setMode('cpu')">لاعب ضد كمبيوتر</button>
+      <br><br>
+      مستوى الكمبيوتر:
+      <select id="difficulty" onchange="setDifficulty(this.value)">
+        <option value="easy">سهل</option>
+        <option value="medium">متوسط</option>
+        <option value="hard">صعب</option>
+    <option value="impossible">مستحيل</option>
+      </select>
+    </div>
+    <button onclick="startGame()">ابدأ اللعب</button>
+  </div>
+
+  <!-- اللعبة -->
+  <div class="game-container" id="gameContainer">
+    <h1>لعبة إكس-أو</h1>
+    <div class="board" id="board"></div>
+    <div id="status" class="status"></div>
+    <button onclick="resetGame()">إعادة اللعب</button>
+  </div>
+
+  
+<audio id="clickSound" src="click.mp3"></audio>
+<audio id="winSound" src="win.mp3"></audio>
+<script>
+
+    const board = document.getElementById('board');
+    const status = document.getElementById('status');
+    const startScreen = document.getElementById('startScreen');
+    const gameContainer = document.getElementById('gameContainer');
+
+    let cells = [];
+    let currentPlayer = 'X';
+    let gameActive = true;
+    let mode = 'player';
+    let difficulty = 'easy';
+
+    function setMode(selectedMode) {
+      mode = selectedMode;
+    }
+
+    function setDifficulty(level) {
+      difficulty = level;
+    }
+
+    function startGame() {
+      startScreen.classList.remove('active');
+      gameContainer.classList.add('active');
+      resetGame();
+    }
+
+    function createBoard() {
+      board.innerHTML = '';
+      cells = [];
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.addEventListener('click', () => makeMove(i));
+        cells.push(cell);
+        board.appendChild(cell);
+      }
+    }
+
+    function makeMove(index) {
+      if (!gameActive || cells[index].textContent) return;
+      if (mode === 'cpu' && currentPlayer === 'O') return;
+
+      document.getElementById('clickSound').play();
+      cells[index].textContent = currentPlayer;
+      if (checkWinner()) {
+        document.getElementById('winSound').play();
+        status.textContent = `اللاعب ${currentPlayer} فاز!`;
+        gameActive = false;
+        return;
+      }
+
+      if (cells.every(cell => cell.textContent)) {
+        status.textContent = 'تعادل!';
+        gameActive = false;
+        return;
+      }
+
+      currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+
+      if (mode === 'cpu' && currentPlayer === 'O') {
+        setTimeout(computerMove, 400);
+      }
+    }
+
+    function computerMove() {
+      if (difficulty === 'easy') {
+        let blockIndex = findBlockingMove('X');
+        if (blockIndex !== null) {
+          makeMove(blockIndex);
+          return;
+        }
+        if (!cells[4].textContent) {
+          makeMove(4);
+          return;
+        }
+        let emptyIndices = cells.map((c, i) => c.textContent ? null : i).filter(i => i !== null);
+        let randomIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+        makeMove(randomIndex);
+      } else if (difficulty === 'medium') {
+        if (Math.random() < 0.5) {
+          let emptyIndices = cells.map((c, i) => c.textContent ? null : i).filter(i => i !== null);
+          let randomIndex = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+          makeMove(randomIndex);
+        } else {
+          smartMove();
+        }
+      } else {
+        smartMove();
+      }
+    }
+
+    function smartMove() {
+      let bestScore = -Infinity;
+      let move;
+      for (let i = 0; i < 9; i++) {
+        if (!cells[i].textContent) {
+          cells[i].textContent = 'O';
+          let score = minimax(cells, 0, false);
+          cells[i].textContent = '';
+          if (score > bestScore) {
+            bestScore = score;
+            move = i;
+          }
+        }
+      }
+      if (move !== undefined) {
+        makeMove(move);
+      }
+    }
+
+    function minimax(boardState, depth, isMaximizing) {
+      const winner = evaluateBoard();
+      if (winner !== null) {
+        if (winner === 'O') return 10 - depth;
+        if (winner === 'X') return depth - 10;
+        if (winner === 'draw') return 0;
+      }
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (!boardState[i].textContent) {
+            boardState[i].textContent = 'O';
+            let score = minimax(boardState, depth + 1, false);
+            boardState[i].textContent = '';
+            bestScore = Math.max(score, bestScore);
+          }
+        }
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (!boardState[i].textContent) {
+            boardState[i].textContent = 'X';
+            let score = minimax(boardState, depth + 1, true);
+            boardState[i].textContent = '';
+            bestScore = Math.min(score, bestScore);
+          }
+        }
+        return bestScore;
+      }
+    }
+
+    function evaluateBoard() {
+      const winComb = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+
+      for (const [a, b, c] of winComb) {
+        if (
+          cells[a].textContent &&
+          cells[a].textContent === cells[b].textContent &&
+          cells[a].textContent === cells[c].textContent
+        ) {
+          return cells[a].textContent;
+        }
+      }
+
+      if (cells.every(cell => cell.textContent)) {
+        return 'draw';
+      }
+
+      return null;
+    }
+
+    function findBlockingMove(playerSymbol) {
+      const winComb = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+
+      for (const [a, b, c] of winComb) {
+        const values = [cells[a].textContent, cells[b].textContent, cells[c].textContent];
+        const countPlayer = values.filter(v => v === playerSymbol).length;
+        const countEmpty = values.filter(v => !v).length;
+
+        if (countPlayer === 2 && countEmpty === 1) {
+          if (!cells[a].textContent) return a;
+          if (!cells[b].textContent) return b;
+          if (!cells[c].textContent) return c;
+        }
+      }
+
+      return null;
+    }
+
+    function resetGame() {
+      currentPlayer = 'X';
+      gameActive = true;
+      status.textContent = '';
+      createBoard();
+    }
+
+    createBoard();
+  </script>
+</body>
+</html>
